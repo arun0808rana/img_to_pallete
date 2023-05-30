@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Color Picker</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: monospace;
+        }
+
+        .color-swatch-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 16px;
+            border: 1px solid #d3d3d3;
+        }
+
+        .color-name {
+            width: fit-content;
+            height: fit-content;
+            padding: 4px;
+            margin: 8px;
+        }
+
+        #image {
+            /* display: none; */
+            height: 100%;
+            max-height: 768px;
+        }
+
+        .copy-icon {
+            width: 24px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .copy-icon:active {
+            transform: scale(0.9);
+        }
+
+        .swtach-detail {
+            display: flex;
+            align-items: center;
+        }
+
+        form {
+            width: 100%;
+            max-width: 576px;
+            display: flex;
+        }
+
+        .url-select {
+            width: 100%;
+            padding: 4px 8px;
+            outline: none;
+            margin-right: 8px;
+        }
+
+        .loading {
+            margin-top: 8px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Image Color Picker</h1>
+    <input type="file" accept="image/*" onchange="loadImage(event)">
+    <br>
+    <form onsubmit="handleSubmit(event)">
+        <input type="text" class="url-select" placeholder="Enter url">
+        <button>Go</button>
+    </form>
+    <div class="loading">Loading...</div>
+    <br>
+    <img id="image" alt="Image" onclick="pickColor(event)">
+    <div class="swtach-detail">
+        <div class="color-swatch-box">
+            <div class="color-name"></div>
+        </div>
+        <img src="copy.svg" alt="copy icon" class="copy-icon" onclick="copyToClipboard()">
+    </div>
+    <script>
+        const swatchBox = document.querySelector('.color-swatch-box');
+        const imgHandle = document.querySelector('#image');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        const colorName = document.querySelector('.color-name');
+        const imgURL = document.querySelector('.url-select');
+        const loader = document.querySelector('.loading');
+        let selectedColor;
+
+        (async () => {
+            imgHandle.src = await urlToBase64('http://placekitten.com/200/300');
+        })()
+
+        function loadImage(event) {
+            let file = event.target.files[0];
+            let reader = new FileReader();
+            reader.onload = function (e) {
+                imgHandle.src = e.target.result;
+                imgHandle.style.display = 'inline-block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function pickColor(event) {
+            canvas.width = imgHandle.width;
+            canvas.height = imgHandle.height;
+            context.drawImage(imgHandle, 0, 0, imgHandle.width, imgHandle.height);
+            let pixelData = context.getImageData(event.offsetX, event.offsetY, 1, 1).data;
+            let hexColor = rgbToHex(pixelData[0], pixelData[1], pixelData[2]);
+            swatchBox.style.backgroundColor = hexColor;
+            colorName.textContent = hexColor;
+            colorName.style.color = generateContrastColor(hexColor);
+            selectedColor = hexColor;
+
+        }
+
+        function copyToClipboard() {
+            navigator.clipboard.writeText(selectedColor)
+                .catch((error) => {
+                    console.error('Failed to copy text:', error);
+                });
+        }
+
+        function rgbToHex(red, green, blue) {
+            let rgb = blue | (green << 8) | (red << 16);
+            return '#' + (0x1000000 + rgb).toString(16).slice(1);
+        }
+
+        function generateContrastColor(background) {
+            // Remove the leading # symbol if present
+            background = background.replace('#', '');
+
+            // Convert the hexadecimal background color to RGB
+            const r = parseInt(background.substr(0, 2), 16);
+            const g = parseInt(background.substr(2, 2), 16);
+            const b = parseInt(background.substr(4, 2), 16);
+
+            // Calculate the relative luminance of the background color
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+            // Determine the appropriate contrast color based on the luminance value
+            const contrastColor = luminance > 0.5 ? '#000000' : '#FFFFFF';
+
+            return contrastColor;
+        }
+
+        async function urlToBase64(url) {
+            displayLoader();
+            const response = await fetch('/getBase64', {
+                method: 'POST',
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ url })
+            })
+            const jsonRespose = await response.json();
+            hideLoader();
+            if (!jsonRespose.error) {
+                return jsonRespose.base64Url;
+            } else {
+                return '';
+            }
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            imgHandle.src = await urlToBase64(imgURL.value);
+        }
+
+        function displayLoader() {
+            loader.style.display = 'block';
+        }
+
+        function hideLoader() {
+            loader.style.display = 'none';
+        }
+
+        // function imgSrcToBase64(src) {
+        //     return new Promise((resolve, reject) => {
+        //         const img = new Image();
+        //         // img.crossOrigin = 'Anonymous';
+        //         img.onload = () => {
+        //             const canvas = document.createElement('canvas');
+        //             canvas.width = img.width;
+        //             canvas.height = img.height;
+
+        //             const ctx = canvas.getContext('2d');
+        //             ctx.drawImage(img, 0, 0);
+
+        //             const dataURL = canvas.toDataURL('image/png'); // Change 'image/png' to the desired image format
+
+        //             resolve(dataURL);
+        //         };
+
+        //         img.onerror = () => {
+        //             reject(new Error('Failed to load image'));
+        //         };
+
+        //         img.src = src;
+        //     });
+        // }
+
+
+    </script>
+</body>
+
+</html>
